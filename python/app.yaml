@@ -1,4 +1,3 @@
-application: YOUR-PROJECT-ID-GOES-HERE
 runtime: python27
 api_version: 1
 threadsafe: true
