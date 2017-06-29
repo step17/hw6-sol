@@ -1,5 +1,4 @@
-# hw6
-Initial template for HW6
+# hw6 template
 
 1. Fork a repository for yourself with the github "Fork" button.
 2. Clone your repository to your local machine.
