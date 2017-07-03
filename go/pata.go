@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	templates = template.Must(template.New("pata").ParseGlob("pata.html"))
+	pata = template.Must(template.New("pata").ParseGlob("pata.html"))
 )
 
 func init() {
@@ -30,5 +30,5 @@ func handlePata(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	templates.ExecuteTemplate(w, "pata.html", res)
+	pata.ExecuteTemplate(w, "pata.html", res)
 }
