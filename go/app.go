@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	templates = template.Must(template.New("base").Funcs(funcMap).ParseGlob("pata.html"))
+	templates = template.Must(template.New("pata").ParseGlob("pata.html"))
 )
 
 func init() {
@@ -30,9 +30,5 @@ func handlePata(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	err := templates.ExecuteTemplate(w, "pata.html", res)
-	if err != nil {
-		return err
-	}
-	return nil
+	templates.ExecuteTemplate(w, "pata.html", res)
 }
