@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
-	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
 
@@ -157,7 +156,6 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 		// Pop first thing from queue, keep the rest.
 		path, toVisit = toVisit[0], toVisit[1:]
 		last := path.Last()
-		log.Infof(ctx, "@ %v", last)
 		if last.Station == to {
 			return path
 		}
@@ -166,7 +164,6 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 				continue
 			}
 			add := path.Grow(out, lines)
-			log.Infof(ctx, "+ adding %v to %v", add.Last(), add)
 			toVisit = append(toVisit, add)
 			visited[out] = true
 		}
