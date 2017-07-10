@@ -16,7 +16,7 @@ const (
 )
 
 var (
-	colors = []string{"#386cb0", "#7fc97f", "#beaed4", "#bf5b17", "#f0027f", "#fdc086", "#ff83fa"}
+	colors = []string{"#9acd32", "#da0442", "#beaed4", "#009cd2", "#ee86a7", "#f18c43", "#9caeb7"}
 )
 
 func init() {
