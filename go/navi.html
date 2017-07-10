@@ -1,0 +1,32 @@
+<html>
+	<head>
+		<title>Fantasy navigation example</title>
+		<style>
+			ul { list-style-image: url("images/train.png");}
+		</style>
+	</head>
+	<body>
+		<form>
+			出発駅: <select name=from>
+				{{block "StationOptions" .}}
+				{{range .Network}}
+				<option disabled>{{.Name}}</option>
+				{{range .Stations}}<option>{{.}}</option>{{end}}
+				{{end}}
+				{{end}}
+			</select>
+			到着駅: <select name=to>
+				{{template "StationOptions" .}}
+			</select>
+			<input type=submit value="案内"/>
+		</form>
+		{{if and .From .To}}
+		<p>
+			<h3>{{.From}}から{{.To}}までの案内:</h3>
+			<ul>
+				{{range .Path}}<li>{{.}}</li>{{end}}
+			</ul>
+		</p>
+		{{end}}
+	</body>
+</html>

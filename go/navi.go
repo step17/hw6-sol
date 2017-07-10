@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 
@@ -23,6 +23,9 @@ type Navi struct {
 	World     string
 	Network   []Line
 	Adjacency StationGraph
+	From      string
+	To        string
+	Path      []string
 }
 
 type Line struct {
@@ -30,6 +33,8 @@ type Line struct {
 	Stations []string
 }
 
+// StationGraph is a map of StationX->StationY combinations showing
+// whether there's an from StationX to StationY.
 type StationGraph map[string]map[string]bool
 
 func (n *Navi) LoadNet(ctx context.Context) error {
@@ -68,10 +73,10 @@ func Adjacency(lines []Line) StationGraph {
 		if len(s) < 1 {
 			continue
 		}
-		init(s[0])
 		for i := 1; i < len(s); i++ {
 			x, y := s[i], s[i-1]
 			init(x)
+			init(y)
 			g[x][y] = true
 			g[y][x] = true
 		}
@@ -79,17 +84,74 @@ func Adjacency(lines []Line) StationGraph {
 	return g
 }
 
-type Page struct {
-	World string
+// Exists returns true iff the given station exists in the graph.
+func (g StationGraph) Exists(station string) bool {
+	_, ok := g[station]
+	return ok
 }
+
+// Path is a convenience type for representing a path though a series
+// of stations.
+type Path []string
+
+// Last returns the last step in a path. Panics if p is empty.
+func (p Path) Last() string {
+	return p[len(p)-1]
+}
+
+// Grow makes a new Path that includes the given path plus a new
+// station.
+func (p Path) Grow(station string) Path {
+	n := make(Path, len(p), len(p)+1)
+	copy(n, p)
+	n = append(n, station)
+	return n
+}
+
+func (n Navi) Route(ctx context.Context, from, to string) Path {
+	visited := map[string]bool{from: true}
+	toVisit := []Path{{from}}
+	for len(toVisit) > 0 {
+		var path Path
+		// Pop first thing from queue, keep the rest.
+		path, toVisit = toVisit[0], toVisit[1:]
+		last := path.Last()
+		if last == to {
+			return path
+		}
+		for out := range n.Adjacency[last] {
+			if visited[out] {
+				continue
+			}
+			add := path.Grow(out)
+			toVisit = append(toVisit, add)
+			visited[out] = true
+		}
+	}
+	// No path found.
+	return nil
+}
+
+var (
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{
+		"Skip1": func(s []string) []string { return s[1:] },
+	}).ParseGlob("*.html"))
+)
 
 func handleNavi(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	n := Navi{World: r.FormValue("world")}
+	n := Navi{
+		World: r.FormValue("world"),
+		From:  r.FormValue("from"),
+		To:    r.FormValue("to"),
+	}
 	if err := n.LoadNet(ctx); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	fmt.Fprintf(w, "%#v", n)
+	if n.Adjacency.Exists(n.From) && n.Adjacency.Exists(n.To) {
+		n.Path = n.Route(ctx, n.From, n.To)
+	}
+	tmpl.ExecuteTemplate(w, "navi.html", n)
 }
