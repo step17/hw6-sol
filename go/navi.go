@@ -15,6 +15,10 @@ const (
 	kHost = "https://fantasy-transit.appspot.com"
 )
 
+var (
+	colors = []string{"#386cb0", "#7fc97f", "#beaed4", "#bf5b17", "#f0027f", "#fdc086", "#ff83fa"}
+)
+
 func init() {
 	http.HandleFunc("/", handleNavi)
 }
@@ -31,6 +35,7 @@ type Navi struct {
 type Line struct {
 	Name     string
 	Stations []string
+	Color    string
 }
 
 // StationGraph is a map of StationX->StationY combinations showing
@@ -56,6 +61,12 @@ func (n *Navi) LoadNet(ctx context.Context) error {
 	dec := json.NewDecoder(resp.Body)
 	if err = dec.Decode(&n.Network); err != nil {
 		return err
+	}
+	// Add line colors for fun
+	for li := range n.Network {
+		if li < len(colors) {
+			n.Network[li].Color = colors[li]
+		}
 	}
 	n.Adjacency = Adjacency(n.Network)
 	return nil
@@ -147,11 +158,14 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 		To:    r.FormValue("to"),
 	}
 	if err := n.LoadNet(ctx); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		panic(err)
 	}
 
 	if n.Adjacency.Exists(n.From) && n.Adjacency.Exists(n.To) {
 		n.Path = n.Route(ctx, n.From, n.To)
 	}
-	tmpl.ExecuteTemplate(w, "navi.html", n)
+	err := tmpl.ExecuteTemplate(w, "navi.html", n)
+	if err != nil {
+		panic(err)
+	}
 }

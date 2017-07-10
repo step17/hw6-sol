@@ -10,10 +10,10 @@
 			出発駅: <select name=from>
 				{{block "StationOptions" .}}
 				{{range .Network}}
-				<option disabled>{{.Name}}</option>
-				{{range .Stations}}<option>{{.}}</option>{{end}}
-				{{end}}
-				{{end}}
+				{{$color := .Color}}
+				<option style="background-color: {{$color}};" disabled>{{.Name}}</option>
+				{{range .Stations}}<option style="color: {{$color}};" >{{.}}</option>{{end}}
+				{{end}}{{end}}
 			</select>
 			到着駅: <select name=to>
 				{{template "StationOptions" .}}
