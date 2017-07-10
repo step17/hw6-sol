@@ -26,10 +26,11 @@ func init() {
 type Navi struct {
 	World     string
 	Network   []Line
+	Lines     map[string]Line
 	Adjacency StationGraph
 	From      string
 	To        string
-	Path      []string
+	Path      Path
 }
 
 type Line struct {
@@ -38,9 +39,10 @@ type Line struct {
 	Color    string
 }
 
-// StationGraph is a map of StationX->StationY combinations showing
-// whether there's an from StationX to StationY.
-type StationGraph map[string]map[string]bool
+// StationGraph is a map of StationX->StationY->LineZ combinations
+// showing whether there's an edge representing a link StationX to
+// StationY on LineZ.
+type StationGraph map[string]map[string]map[string]bool
 
 func (n *Navi) LoadNet(ctx context.Context) error {
 	req, err := http.NewRequest("GET", kHost, nil)
@@ -62,11 +64,14 @@ func (n *Navi) LoadNet(ctx context.Context) error {
 	if err = dec.Decode(&n.Network); err != nil {
 		return err
 	}
+	n.Lines = make(map[string]Line)
 	// Add line colors for fun
 	for li := range n.Network {
+		line := &n.Network[li]
 		if li < len(colors) {
-			n.Network[li].Color = colors[li]
+			line.Color = colors[li]
 		}
+		n.Lines[line.Name] = *line
 	}
 	n.Adjacency = Adjacency(n.Network)
 	return nil
@@ -74,22 +79,24 @@ func (n *Navi) LoadNet(ctx context.Context) error {
 
 func Adjacency(lines []Line) StationGraph {
 	g := make(StationGraph)
-	init := func(x string) {
-		if g[x] == nil {
-			g[x] = make(map[string]bool)
-		}
-	}
 	for _, line := range lines {
+		init := func(x, y string) {
+			if g[x] == nil {
+				g[x] = make(map[string]map[string]bool)
+			}
+			if g[x][y] == nil {
+				g[x][y] = make(map[string]bool)
+			}
+			g[x][y][line.Name] = true
+		}
 		s := line.Stations
 		if len(s) < 1 {
 			continue
 		}
 		for i := 1; i < len(s); i++ {
 			x, y := s[i], s[i-1]
-			init(x)
-			init(y)
-			g[x][y] = true
-			g[y][x] = true
+			init(x, y)
+			init(y, x)
 		}
 	}
 	return g
@@ -101,41 +108,62 @@ func (g StationGraph) Exists(station string) bool {
 	return ok
 }
 
-// Path is a convenience type for representing a path though a series
-// of stations.
-type Path []string
+// Path represents a path though a series of stations.
+type Path []Hop
+
+// A hop is one point in a path.
+type Hop struct {
+	Station string
+	// Line represents the incoming line, if set.
+	Line string
+}
 
 // Last returns the last step in a path. Panics if p is empty.
-func (p Path) Last() string {
-	return p[len(p)-1]
+func (p Path) Last() *Hop {
+	return &p[len(p)-1]
 }
 
 // Grow makes a new Path that includes the given path plus a new
 // station.
-func (p Path) Grow(station string) Path {
+func (p Path) Grow(station string, lines map[string]bool) Path {
 	n := make(Path, len(p), len(p)+1)
 	copy(n, p)
-	n = append(n, station)
+	hop := Hop{Station: station}
+	last := p.Last()
+	if lines[last.Line] { // stay on same line if possible
+		hop.Line = last.Line
+	} else { // otherwise pick one arbitrarily.
+		for line := range lines {
+			hop.Line = line
+			break
+		}
+	}
+	if last.Line == "" {
+		last.Line = hop.Line
+	}
+	n = append(n, hop)
 	return n
 }
 
 func (n Navi) Route(ctx context.Context, from, to string) Path {
+	if from == to {
+		return nil
+	}
 	visited := map[string]bool{from: true}
-	toVisit := []Path{{from}}
+	toVisit := []Path{{{Station: from}}}
 	for len(toVisit) > 0 {
 		var path Path
 		// Pop first thing from queue, keep the rest.
 		path, toVisit = toVisit[0], toVisit[1:]
 		last := path.Last()
-		if last == to {
+		if last.Station == to {
 			return path
 		}
-		for out := range n.Adjacency[last] {
+		for out, lines := range n.Adjacency[last.Station] {
 			if visited[out] {
 				continue
 			}
-			add := path.Grow(out)
-			toVisit = append(toVisit, add)
+			toVisit = append(toVisit, path.Grow(out, lines))
 			visited[out] = true
 		}
 	}
@@ -145,7 +173,7 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 
 var (
 	tmpl = template.Must(template.New("").Funcs(template.FuncMap{
-		"Skip1": func(s []string) []string { return s[1:] },
+		"LineColor": func(s string) string { return "" },
 	}).ParseGlob("*.html"))
 )
 
@@ -164,7 +192,10 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 	if n.Adjacency.Exists(n.From) && n.Adjacency.Exists(n.To) {
 		n.Path = n.Route(ctx, n.From, n.To)
 	}
-	err := tmpl.ExecuteTemplate(w, "navi.html", n)
+	err := tmpl.Funcs(template.FuncMap{
+		"LineColor": func(s string) string {
+			return n.Lines[s].Color
+		}}).ExecuteTemplate(w, "navi.html", n)
 	if err != nil {
 		panic(err)
 	}
