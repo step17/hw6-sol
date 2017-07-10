@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
 
@@ -129,7 +130,7 @@ func (p Path) Grow(station string, lines map[string]bool) Path {
 	n := make(Path, len(p), len(p)+1)
 	copy(n, p)
 	hop := Hop{Station: station}
-	last := p.Last()
+	last := n.Last()
 	if lines[last.Line] { // stay on same line if possible
 		hop.Line = last.Line
 	} else { // otherwise pick one arbitrarily.
@@ -156,6 +157,7 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 		// Pop first thing from queue, keep the rest.
 		path, toVisit = toVisit[0], toVisit[1:]
 		last := path.Last()
+		log.Infof(ctx, "@ %v", last)
 		if last.Station == to {
 			return path
 		}
@@ -163,7 +165,9 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 			if visited[out] {
 				continue
 			}
-			toVisit = append(toVisit, path.Grow(out, lines))
+			add := path.Grow(out, lines)
+			log.Infof(ctx, "+ adding %v to %v", add.Last(), add)
+			toVisit = append(toVisit, add)
 			visited[out] = true
 		}
 	}
