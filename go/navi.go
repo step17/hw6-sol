@@ -268,7 +268,10 @@ var (
 
 func LoadNavi(r *http.Request) (context.Context, Navi) {
 	ctx := appengine.NewContext(r)
-	hostname := appengine.DefaultVersionHostname(ctx)
+	hostname := r.URL.Host
+	if hostname == "" {
+		appengine.DefaultVersionHostname(ctx)
+	}
 	n := Navi{
 		Worlds:   allWorlds,
 		World:    r.FormValue("world"),
@@ -291,14 +294,15 @@ func LoadNavi(r *http.Request) (context.Context, Navi) {
 			return n.Lines[s].Color
 		},
 		"WorldLink": func(w string) string {
-			u := *r.URL
 			hostParts := strings.Split(hostname, ".")
+			u := *r.URL
 			if _, exists := allWorlds[hostParts[0]]; exists {
 				hostParts = hostParts[1:]
 			}
 			hostParts = append([]string{w}, hostParts...)
 			u.Host = strings.Join(hostParts, ".")
 			u.RawQuery = ""
+			u.Scheme = "http"
 			return u.String()
 		}},
 	)
