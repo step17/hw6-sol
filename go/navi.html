@@ -39,5 +39,7 @@
 			</table>
 		</p>
 		{{end}}
+    {{$world := .World}}
+    <p>他の世界を選ぶ<table><tr>{{range $k, $v := .Worlds}}<td {{if eq $k $world}}bgcolor="#aaaaaa"{{end}}><a href="{{WorldLink $k}}">{{$v}}</a></td>{{end}}</tr></table></p>
 	</body>
 </html>

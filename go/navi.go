@@ -5,9 +5,11 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
 
@@ -16,7 +18,13 @@ const (
 )
 
 var (
-	colors = []string{"#9acd32", "#da0442", "#beaed4", "#009cd2", "#ee86a7", "#f18c43", "#9caeb7"}
+	colors    = []string{"#9acd32", "#da0442", "#beaed4", "#009cd2", "#ee86a7", "#f18c43", "#9caeb7"}
+	allWorlds = map[string]string{"tokyo": "東京周辺",
+		"alice":    "不思議な国のアリス",
+		"nausicaa": "風の谷のナウシカア",
+		"lotr":     "Middle Earth (Lord of the Rings)",
+		"pokemon":  "Pokemon Kanto Region",
+	}
 )
 
 func init() {
@@ -25,6 +33,7 @@ func init() {
 
 type Navi struct {
 	World         string
+	Worlds        map[string]string
 	Network       []Line
 	Lines         map[string]Line
 	Adjacency     StationGraph
@@ -253,20 +262,46 @@ func AsPriority(p string) Priority {
 var (
 	tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		"LineColor": func(s string) string { return "" },
+		"WorldLink": func(s string) string { return "" },
 	}).ParseGlob("*.html"))
 )
 
 func LoadNavi(r *http.Request) (context.Context, Navi) {
 	ctx := appengine.NewContext(r)
+	hostname := appengine.DefaultVersionHostname(ctx)
 	n := Navi{
+		Worlds:   allWorlds,
 		World:    r.FormValue("world"),
 		From:     r.FormValue("from"),
 		To:       r.FormValue("to"),
 		Priority: AsPriority(r.FormValue("priority")),
 	}
+	if n.World == "" {
+		hostParts := strings.Split(hostname, ".")
+		log.Infof(ctx, "host %v -> hostparts: %v", hostname, hostParts)
+		if _, exists := allWorlds[hostParts[0]]; exists {
+			n.World = hostParts[0]
+		}
+	}
 	if err := n.LoadNet(ctx); err != nil {
 		panic(err)
 	}
+	tmpl.Funcs(template.FuncMap{
+		"LineColor": func(s string) string {
+			return n.Lines[s].Color
+		},
+		"WorldLink": func(w string) string {
+			u := *r.URL
+			hostParts := strings.Split(hostname, ".")
+			if _, exists := allWorlds[hostParts[0]]; exists {
+				hostParts = hostParts[1:]
+			}
+			hostParts = append([]string{w}, hostParts...)
+			u.Host = strings.Join(hostParts, ".")
+			u.RawQuery = ""
+			return u.String()
+		}},
+	)
 	return ctx, n
 }
 
@@ -276,10 +311,7 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 	if n.Adjacency.Exists(n.From) && n.Adjacency.Exists(n.To) {
 		n.Path = n.Route(ctx, n.From, n.To)
 	}
-	err := tmpl.Funcs(template.FuncMap{
-		"LineColor": func(s string) string {
-			return n.Lines[s].Color
-		}}).ExecuteTemplate(w, "navi.html", n)
+	err := tmpl.ExecuteTemplate(w, "navi.html", n)
 	if err != nil {
 		panic(err)
 	}
