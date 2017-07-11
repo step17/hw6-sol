@@ -26,8 +26,8 @@ stations" to enumerate a stations between them.
 
 For example this adjacency graph for Tokyo:
 
-![Tokyo adjacency](tokyo.png)
+![Tokyo adjacency](tokyo-adj.png)
 
 And the corresponding *line* adjacency graph where stations on the same line are connected:
 
-![Tokyo adjacency](tokyo-lines.png)
+![Tokyo adjacency](tokyo-line-adj.png)
