@@ -2,7 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -21,6 +23,7 @@ var (
 
 func init() {
 	http.HandleFunc("/", handleNavi)
+	http.HandleFunc("/gv", handleGV)
 }
 
 type Navi struct {
@@ -122,6 +125,32 @@ func LineAdjacency(lines []Line) StationGraph {
 		}
 	}
 	return g
+}
+
+func (n Navi) GV(w io.Writer, g StationGraph) {
+	fmt.Fprintln(w, `graph g {`)
+	fmt.Fprintln(w, `  graph [overlap=scale]`)
+	done := make(map[string]bool)
+	keyFn := func(x, y string) string {
+		if x < y {
+			y, x = x, y
+		}
+		return x + ":" + y
+	}
+	for x, ym := range g {
+		for y, lines := range ym {
+			key := keyFn(x, y)
+			if done[key] || x == y {
+				continue
+			}
+			for line := range lines {
+				fmt.Fprintf(w, `  "%s" -- "%s" [color="%s"]`, x, y, n.Lines[line].Color)
+				fmt.Fprintf(w, "\n")
+			}
+			done[key] = true
+		}
+	}
+	fmt.Fprintln(w, "}")
 }
 
 // Exists returns true iff the given station exists in the graph.
@@ -256,9 +285,8 @@ var (
 	}).ParseGlob("*.html"))
 )
 
-func handleNavi(w http.ResponseWriter, r *http.Request) {
+func LoadNavi(r *http.Request) (context.Context, Navi) {
 	ctx := appengine.NewContext(r)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	n := Navi{
 		World:    r.FormValue("world"),
 		From:     r.FormValue("from"),
@@ -268,7 +296,12 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 	if err := n.LoadNet(ctx); err != nil {
 		panic(err)
 	}
+	return ctx, n
+}
 
+func handleNavi(w http.ResponseWriter, r *http.Request) {
+	ctx, n := LoadNavi(r)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if n.Adjacency.Exists(n.From) && n.Adjacency.Exists(n.To) {
 		n.Path = n.Route(ctx, n.From, n.To)
 	}
@@ -279,4 +312,10 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func handleGV(w http.ResponseWriter, r *http.Request) {
+	_, n := LoadNavi(r)
+	w.Header().Set("Content-Type", "text/gv; charset=utf-8")
+	n.GV(w, n.LineAdjacency)
 }
