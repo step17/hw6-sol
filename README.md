@@ -1,12 +1,33 @@
-# hw6 template
+# HW6 example solution
 
-1. Fork a repository for yourself with the github "Fork" button.
-2. Clone your repository to your local machine.
-3. Start a local AppEngine server with `dev_appserver.py go/` or `dev_appserver.py python/` (depending on whether you're using Go or Python).
-4. Add functionality and test your App by viewing the local instance at http://localhost:8080
-5. Deploy your app to AppEngine with `gcloud app deploy go/` or `gcloud app deploy python/`
-    1. Note: the first time you do this, you'll have to first set up an AppEngine project via [Google Cloud Console](https://console.cloud.google.com/appengine/).
-6. `git add .` and `git commit` and `git push` to upload your changes to your GitHub repository.
-7. Send email to the STEP mailing list to show everyone your awesome App!
+This is an example solution for STEP HW6, implemented in Go.
 
-Feel free to repeat steps 3-7 as much as you like!
+Part 1:
+
+- パタトクカシーー is at http://fantasy-transit-example.appspot.com/pata
+
+Part 2:
+
+- http://fantasy-transit-example.appspot.com/
+
+Ther's two choices for priorities in routing: least transfers, or least stations in the path.
+
+To compute the "least stations" path, it's simply computed
+via [BFS](https://en.wikipedia.org/wiki/Breadth-first_search) over the train
+station network.
+
+To compute the "least transfers" path, the train station network graph is
+transformed into an atlernate graph where all of the stations on the same line
+share an edge. On this graph, a
+shortest [BFS](https://en.wikipedia.org/wiki/Breadth-first_search) path finds
+the stations where transfers should happen. Then between each of these "landmark
+stations", BFS is used again over the single line used between those "landmark
+stations" to enumerate a stations between them.
+
+For example this adjacency graph for Tokyo:
+
+![Tokyo adjacency](tokyo.png)
+
+And the corresponding *line* adjacency graph where stations on the same line are connected:
+
+![Tokyo adjacency](tokyo-lines.png)
