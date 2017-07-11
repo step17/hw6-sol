@@ -15,11 +15,16 @@
 			到着駅: <select id=to name=to>
 				{{template "StationOptions" .}}
 			</select>
+      <select id=priority name=priority>
+        <option>駅数が少ない</option>
+        <option>乗り換え少ない</option>
+      </select>
 			<input type=submit value="案内"/>
 		</form>
 		<script>
 			document.getElementById("from").value="{{.From}}";
 			document.getElementById("to").value="{{.To}}";
+			document.getElementById("priority").value="{{print .Priority}}";
 		</script>
 		{{if .Path}}
 		<p>

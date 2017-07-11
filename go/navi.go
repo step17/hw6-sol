@@ -30,6 +30,7 @@ type Navi struct {
 	Adjacency StationGraph
 	From      string
 	To        string
+	Priority  Priority
 	Path      Path
 }
 
@@ -159,17 +160,46 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 		if last.Station == to {
 			return path
 		}
+
 		for out, lines := range n.Adjacency[last.Station] {
 			if visited[out] {
 				continue
 			}
-			add := path.Grow(out, lines)
-			toVisit = append(toVisit, add)
+			toVisit = append(toVisit, path.Grow(out, lines))
 			visited[out] = true
 		}
 	}
 	// No path found.
 	return nil
+}
+
+// Priority is what to prioritize when making a route
+type Priority int
+
+const (
+	FewerStations Priority = iota
+	FewerTransfers
+)
+
+func (p Priority) String() string {
+	switch p {
+	case FewerStations:
+		return "駅数が少ない"
+	case FewerTransfers:
+		return "乗り換え少ない"
+	}
+	return "Unknown"
+}
+
+func AsPriority(p string) Priority {
+	switch p {
+	case "駅数が少ない":
+		return FewerStations
+	case "乗り換え少ない":
+		return FewerTransfers
+	default:
+		return FewerStations
+	}
 }
 
 var (
@@ -182,9 +212,10 @@ func handleNavi(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	n := Navi{
-		World: r.FormValue("world"),
-		From:  r.FormValue("from"),
-		To:    r.FormValue("to"),
+		World:    r.FormValue("world"),
+		From:     r.FormValue("from"),
+		To:       r.FormValue("to"),
+		Priority: AsPriority(r.FormValue("priority")),
 	}
 	if err := n.LoadNet(ctx); err != nil {
 		panic(err)
