@@ -24,14 +24,15 @@ func init() {
 }
 
 type Navi struct {
-	World     string
-	Network   []Line
-	Lines     map[string]Line
-	Adjacency StationGraph
-	From      string
-	To        string
-	Priority  Priority
-	Path      Path
+	World         string
+	Network       []Line
+	Lines         map[string]Line
+	Adjacency     StationGraph
+	LineAdjacency StationGraph
+	From          string
+	To            string
+	Priority      Priority
+	Path          Path
 }
 
 type Line struct {
@@ -75,29 +76,49 @@ func (n *Navi) LoadNet(ctx context.Context) error {
 		n.Lines[line.Name] = *line
 	}
 	n.Adjacency = Adjacency(n.Network)
+	n.LineAdjacency = LineAdjacency(n.Network)
 	return nil
+}
+
+func (g StationGraph) init(x, y, line string) {
+	if g[x] == nil {
+		g[x] = make(map[string]map[string]bool)
+	}
+	if g[x][y] == nil {
+		g[x][y] = make(map[string]bool)
+	}
+	g[x][y][line] = true
 }
 
 func Adjacency(lines []Line) StationGraph {
 	g := make(StationGraph)
 	for _, line := range lines {
-		init := func(x, y string) {
-			if g[x] == nil {
-				g[x] = make(map[string]map[string]bool)
-			}
-			if g[x][y] == nil {
-				g[x][y] = make(map[string]bool)
-			}
-			g[x][y][line.Name] = true
-		}
 		s := line.Stations
 		if len(s) < 1 {
 			continue
 		}
 		for i := 1; i < len(s); i++ {
 			x, y := s[i], s[i-1]
-			init(x, y)
-			init(y, x)
+			g.init(x, y, line.Name)
+			g.init(y, x, line.Name)
+		}
+	}
+	return g
+}
+
+// LineAdjacency shows what stations are connected on the same line,
+// regardless of how many stops are in between.
+func LineAdjacency(lines []Line) StationGraph {
+	g := make(StationGraph)
+	for _, line := range lines {
+		s := line.Stations
+		if len(s) < 2 {
+			continue
+		}
+		for i := range s {
+			for j := range s {
+				g.init(s[i], s[j], line.Name)
+			}
 		}
 	}
 	return g
@@ -146,12 +167,15 @@ func (p Path) Grow(station string, lines map[string]bool) Path {
 	return n
 }
 
-func (n Navi) Route(ctx context.Context, from, to string) Path {
+// BFS executes a BFS search over the given graph with from and to as
+// endpoints. If line is specified, only edges from the given
+// line are considered.
+func (g StationGraph) BFS(ctx context.Context, from, to, line string) Path {
 	if from == to {
 		return nil
 	}
 	visited := map[string]bool{from: true}
-	toVisit := []Path{{{Station: from}}}
+	toVisit := []Path{{{Station: from, Line: line}}}
 	for len(toVisit) > 0 {
 		var path Path
 		// Pop first thing from queue, keep the rest.
@@ -161,7 +185,10 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 			return path
 		}
 
-		for out, lines := range n.Adjacency[last.Station] {
+		for out, lines := range g[last.Station] {
+			if line != "" && !lines[line] {
+				continue
+			}
 			if visited[out] {
 				continue
 			}
@@ -171,6 +198,27 @@ func (n Navi) Route(ctx context.Context, from, to string) Path {
 	}
 	// No path found.
 	return nil
+}
+
+func (n Navi) Route(ctx context.Context, from, to string) Path {
+	switch n.Priority {
+	case FewerTransfers:
+		landmarks := n.LineAdjacency.BFS(ctx, from, to, "")
+		if len(landmarks) < 2 {
+			return nil
+		}
+		path := Path{{Station: from}}
+		// Find individual hops between landmarks.
+		for i := 1; i < len(landmarks); i++ {
+			subPath := n.Adjacency.BFS(ctx, landmarks[i-1].Station, landmarks[i].Station, landmarks[i].Line)
+			path = append(path, subPath[1:]...)
+		}
+		// Add line to first hop just to look nicer.
+		path[0].Line = path[1].Line
+		return path
+	default:
+		return n.Adjacency.BFS(ctx, from, to, "")
+	}
 }
 
 // Priority is what to prioritize when making a route
